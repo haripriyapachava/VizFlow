@@ -1,0 +1,101 @@
+export const curriculumData = [
+  {
+    id: 'module-1',
+    title: 'DSA Fundamentals',
+    description: 'Core concepts and mathematical foundations for algorithmic thinking.',
+    lessons: [
+      { id: 'intro-dsa', title: 'Introduction to Data Structures and Algorithms', difficulty: 'Beginner', topic: 'DSA Fundamentals', duration: 22 },
+      { id: 'adt', title: 'Abstract Data Types', difficulty: 'Beginner', topic: 'DSA Fundamentals', duration: 18 },
+      { id: 'complexity', title: 'Time and Space Complexity', difficulty: 'Beginner', topic: 'DSA Fundamentals', duration: 24 },
+      { id: 'big-o', title: 'Big O, Big Omega, and Big Theta', difficulty: 'Intermediate', topic: 'DSA Fundamentals', duration: 26 },
+    ],
+  },
+  {
+    id: 'module-2',
+    title: 'Arrays and Strings',
+    description: 'Arrays, strings, and common patterns for search and traversal.',
+    lessons: [
+      { id: 'linear-search', title: 'Linear Search', difficulty: 'Beginner', topic: 'Arrays and Strings', duration: 18, algorithm: 'linear-search' },
+      { id: 'bubble-sort', title: 'Bubble Sort', difficulty: 'Beginner', topic: 'Arrays and Strings', duration: 28, algorithm: 'bubble-sort' },
+      { id: 'selection-sort', title: 'Selection Sort', difficulty: 'Beginner', topic: 'Arrays and Strings', duration: 24, algorithm: 'selection-sort' },
+      { id: 'insertion-sort', title: 'Insertion Sort', difficulty: 'Beginner', topic: 'Arrays and Strings', duration: 26, algorithm: 'insertion-sort' },
+      { id: 'binary-search', title: 'Binary Search', difficulty: 'Intermediate', topic: 'Arrays and Strings', duration: 31, algorithm: 'binary-search' },
+      { id: 'two-pointers', title: 'Two Pointers', difficulty: 'Intermediate', topic: 'Arrays and Strings', duration: 30, algorithm: 'two-pointers' },
+      { id: 'sliding-window', title: 'Sliding Window', difficulty: 'Advanced', topic: 'Arrays and Strings', duration: 36, algorithm: 'sliding-window' },
+    ],
+  },
+  {
+    id: 'module-3',
+    title: 'Linked Lists',
+    description: 'Pointer-based structures and traversal techniques.',
+    lessons: [
+      { id: 'singly-linked-list', title: 'Singly Linked Lists', difficulty: 'Beginner', topic: 'Linked Lists', duration: 26, algorithm: 'singly-linked-list' },
+      { id: 'doubly-linked-list', title: 'Doubly Linked Lists', difficulty: 'Intermediate', topic: 'Linked Lists', duration: 33, algorithm: 'doubly-linked-list' },
+      { id: 'cycle-detection', title: 'Cycle Detection', difficulty: 'Intermediate', topic: 'Linked Lists', duration: 28 },
+    ],
+  },
+  {
+    id: 'module-4',
+    title: 'Trees',
+    description: 'Explore hierarchical structures, binary trees, BST properties, and traversals.',
+    lessons: [
+      { id: 'tree-introduction', title: 'Introduction to Trees', difficulty: 'Beginner', topic: 'Trees', duration: 18, status: 'interactive', algorithm: 'tree-introduction' },
+      { id: 'binary-trees', title: 'Binary Trees', difficulty: 'Beginner', topic: 'Trees', duration: 22, status: 'interactive', algorithm: 'binary-trees' },
+      { id: 'binary-search-trees', title: 'Binary Search Trees', difficulty: 'Beginner', topic: 'Trees', duration: 26, status: 'interactive', algorithm: 'binary-search-trees' },
+      { id: 'tree-traversals', title: 'Inorder, Preorder, and Postorder Traversal', difficulty: 'Beginner', topic: 'Trees', duration: 30, status: 'interactive', algorithm: 'tree-traversals' },
+      { id: 'level-order-traversal', title: 'Level Order Traversal', difficulty: 'Beginner', topic: 'Trees', duration: 24, status: 'interactive', algorithm: 'level-order-traversal' },
+      { id: 'bst-insertion', title: 'BST Insertion', difficulty: 'Beginner', topic: 'Trees', duration: 26, status: 'interactive', algorithm: 'bst-insertion' },
+      { id: 'bst-deletion', title: 'BST Deletion', difficulty: 'Intermediate', topic: 'Trees', duration: 32, status: 'interactive', algorithm: 'bst-deletion' },
+      { id: 'bst-searching', title: 'BST Searching', difficulty: 'Beginner', topic: 'Trees', duration: 22, status: 'interactive', algorithm: 'bst-searching' },
+      { id: 'tree-height-depth', title: 'Height and Depth of Trees', difficulty: 'Beginner', topic: 'Trees', duration: 20, status: 'interactive', algorithm: 'tree-height-depth' },
+      { id: 'avl-trees', title: 'AVL Trees and Rotations', difficulty: 'Advanced', topic: 'Trees', duration: 34, status: 'interactive', algorithm: 'avl-trees' },
+      { id: 'binary-heaps', title: 'Min Heap and Max Heap', difficulty: 'Intermediate', topic: 'Trees', duration: 28, status: 'interactive', algorithm: 'binary-heaps' },
+      { id: 'tries', title: 'Trie Data Structure', difficulty: 'Intermediate', topic: 'Trees', duration: 30, status: 'interactive', algorithm: 'tries' },
+    ],
+  },
+  {
+    id: 'module-5',
+    title: 'Graphs',
+    description: 'Learn graph representations, traversal, shortest paths, and spanning trees.',
+    lessons: [
+      { id: 'graph-introduction', title: 'Introduction to Graphs', difficulty: 'Beginner', topic: 'Graphs', duration: 18, status: 'interactive', algorithm: 'graph-introduction' },
+      { id: 'graph-directions', title: 'Directed and Undirected Graphs', difficulty: 'Beginner', topic: 'Graphs', duration: 20, status: 'interactive', algorithm: 'graph-directions' },
+      { id: 'graph-weights', title: 'Weighted and Unweighted Graphs', difficulty: 'Beginner', topic: 'Graphs', duration: 20, status: 'interactive', algorithm: 'graph-weights' },
+      { id: 'graph-representations', title: 'Adjacency Matrix and Adjacency List', difficulty: 'Beginner', topic: 'Graphs', duration: 24, status: 'interactive', algorithm: 'graph-representations' },
+      { id: 'graph-bfs', title: 'Breadth-First Search (BFS)', difficulty: 'Beginner', topic: 'Graphs', duration: 28, status: 'interactive', algorithm: 'graph-bfs' },
+      { id: 'graph-dfs', title: 'Depth-First Search (DFS)', difficulty: 'Beginner', topic: 'Graphs', duration: 28, status: 'interactive', algorithm: 'graph-dfs' },
+      { id: 'graph-cycle-detection', title: 'Graph Cycle Detection', difficulty: 'Intermediate', topic: 'Graphs', duration: 30, status: 'interactive', algorithm: 'graph-cycle-detection' },
+      { id: 'dijkstra', title: "Dijkstra's Algorithm", difficulty: 'Intermediate', topic: 'Graphs', duration: 34, status: 'interactive', algorithm: 'dijkstra' },
+      { id: 'bellman-ford', title: 'Bellman-Ford Algorithm', difficulty: 'Advanced', topic: 'Graphs', duration: 36, status: 'interactive', algorithm: 'bellman-ford' },
+      { id: 'topological-sort', title: 'Topological Sorting', difficulty: 'Intermediate', topic: 'Graphs', duration: 30, status: 'interactive', algorithm: 'topological-sort' },
+      { id: 'prim', title: "Prim's Algorithm", difficulty: 'Intermediate', topic: 'Graphs', duration: 32, status: 'interactive', algorithm: 'prim' },
+      { id: 'kruskal', title: "Kruskal's Algorithm", difficulty: 'Intermediate', topic: 'Graphs', duration: 32, status: 'interactive', algorithm: 'kruskal' },
+      { id: 'disjoint-set-union', title: 'Disjoint Set Union', difficulty: 'Intermediate', topic: 'Graphs', duration: 28, status: 'interactive', algorithm: 'disjoint-set-union' },
+    ],
+  },
+];
+
+export const studentOverview = {
+  name: 'Aanya Sharma',
+  email: 'aanya@vizflow.edu',
+  role: 'student',
+  totalActiveMinutes: 182,
+  todayMinutes: 42,
+  weeklyMinutes: [22, 34, 28, 44, 56, 38, 42],
+  completedLessons: 14,
+  totalLessons: 42,
+  streak: 6,
+};
+
+export const facultySummary = {
+  name: 'Dr. Meera Patel',
+  classSize: 32,
+  averageMinutes: 94,
+  activeStudents: 28,
+  topicActivity: [
+    { name: 'Arrays', value: 78 },
+    { name: 'Trees', value: 64 },
+    { name: 'Graphs', value: 52 },
+    { name: 'DP', value: 46 },
+  ],
+};
