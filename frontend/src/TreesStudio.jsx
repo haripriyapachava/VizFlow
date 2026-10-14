@@ -9,6 +9,9 @@ import {
   createTreeHeightDepthSteps,
   createTreeTraversalSteps,
   createTrieSteps,
+  getBstDeletionCode,
+  getBstInsertionCode,
+  getBstSearchCode,
   getBstValidationCode,
   getTreeLayout,
   getTreeTraversalCode,
@@ -130,7 +133,8 @@ function TreeDiagram({ tree, step }) {
       {tree.nodes.filter((node) => node.parent !== null).map((node) => {
         const parent = positions[node.parent];
         const child = positions[node.id];
-        return <line key={`edge-${node.id}`} x1={parent.x} y1={parent.y} x2={child.x} y2={child.y} stroke="#94a3b8" strokeWidth="2" />;
+        const isMovementEdge = step?.edge?.[0] === node.parent && step?.edge?.[1] === node.id;
+        return <line key={`edge-${node.id}`} x1={parent.x} y1={parent.y} x2={child.x} y2={child.y} stroke={isMovementEdge ? '#f59e0b' : '#94a3b8'} strokeWidth={isMovementEdge ? 4 : 2} />;
       })}
       {tree.nodes.map((node) => {
         const point = positions[node.id];
@@ -183,10 +187,19 @@ function AnswerChoices({ title, question, options, answer }) {
 
 export default function TreesStudio({ lessonId }) {
   const content = lessonContent[lessonId] ?? lessonContent['tree-introduction'];
+  const practice = Array.isArray(content.practice) && content.practice.length >= 3
+    ? content.practice
+    : ['What does this tree operation prioritize?', ['The root first', 'Only leaf nodes', 'No specific order'], 0];
+  const quiz = Array.isArray(content.quiz) && content.quiz.length >= 3
+    ? content.quiz
+    : ['Which statement best describes this tree concept?', ['It follows a hierarchical parent-child structure', 'It is always a single chain', 'It can only store one value'], 0];
   const isBstLesson = lessonId === 'binary-search-trees';
   const isTreeOperationLesson = ['level-order-traversal', 'bst-insertion', 'bst-deletion', 'bst-searching', 'tree-height-depth', 'avl-trees', 'binary-heaps', 'tries'].includes(lessonId);
   const availablePresets = isBstLesson ? bstPresets : presets;
   const [inputText, setInputText] = useState(availablePresets[0].values);
+  const [insertionValue, setInsertionValue] = useState('35');
+  const [searchTarget, setSearchTarget] = useState('40');
+  const [deletionValue, setDeletionValue] = useState('30');
   const [selectedPreset, setSelectedPreset] = useState(availablePresets[0].id);
   const [traversal, setTraversal] = useState('inorder');
   const [language, setLanguage] = useState('python');
@@ -216,9 +229,12 @@ export default function TreesStudio({ lessonId }) {
 
   const activeStep = trace?.[currentStep] ?? null;
   const source = useMemo(() => {
+    if (lessonId === 'bst-insertion') return getBstInsertionCode(language);
+    if (lessonId === 'bst-searching') return getBstSearchCode(language);
+    if (lessonId === 'bst-deletion') return getBstDeletionCode(language);
     if (isBstLesson) return getBstValidationCode(language);
     return getTreeTraversalCode(traversal, language);
-  }, [isBstLesson, language, traversal]);
+  }, [isBstLesson, language, lessonId, traversal]);
   const sourceLines = source.code.split('\n');
 
   const updateInput = (value, preset = 'custom') => {
@@ -239,16 +255,28 @@ export default function TreesStudio({ lessonId }) {
     try {
       const tree = parseBinaryTreeLevelOrder(inputText);
       let steps = [];
-      if (isBstLesson) {
+      if (lessonId === 'bst-insertion') {
+        const trimmedValue = insertionValue.trim();
+        if (!/^[+-]?\d+$/.test(trimmedValue) || !Number.isSafeInteger(Number(trimmedValue))) {
+          throw new Error('Enter a valid safe integer to insert.');
+        }
+        steps = createBstInsertionSteps(tree, Number(trimmedValue));
+      } else if (lessonId === 'bst-searching') {
+        const trimmedTarget = searchTarget.trim();
+        if (!/^[+-]?\d+$/.test(trimmedTarget) || !Number.isSafeInteger(Number(trimmedTarget))) {
+          throw new Error('Enter a valid safe integer to search for.');
+        }
+        steps = createBstSearchSteps(tree, Number(trimmedTarget));
+      } else if (lessonId === 'bst-deletion') {
+        const trimmedValue = deletionValue.trim();
+        if (!/^[+-]?\d+$/.test(trimmedValue) || !Number.isSafeInteger(Number(trimmedValue))) {
+          throw new Error('Enter a valid safe integer to delete.');
+        }
+        steps = createBstDeletionSteps(tree, Number(trimmedValue));
+      } else if (isBstLesson) {
         steps = createBstValidationSteps(tree);
       } else if (lessonId === 'level-order-traversal') {
         steps = createTreeTraversalSteps(tree, 'level-order');
-      } else if (lessonId === 'bst-insertion') {
-        steps = createBstInsertionSteps(tree, 35);
-      } else if (lessonId === 'bst-deletion') {
-        steps = createBstDeletionSteps(tree, 30);
-      } else if (lessonId === 'bst-searching') {
-        steps = createBstSearchSteps(tree, 40);
       } else if (lessonId === 'tree-height-depth') {
         steps = createTreeHeightDepthSteps(tree);
       } else if (lessonId === 'avl-trees') {
@@ -271,8 +299,10 @@ export default function TreesStudio({ lessonId }) {
     setCurrentStep(step);
   };
 
-  const nodeValue = (nodeId) => nodeId === null || nodeId === undefined ? '—' : parsed.tree?.nodes[nodeId]?.value ?? '—';
+  const displayedTree = ['bst-insertion', 'bst-deletion'].includes(lessonId) ? activeStep?.tree ?? parsed.tree : parsed.tree;
+  const nodeValue = (nodeId) => nodeId === null || nodeId === undefined ? '—' : displayedTree?.nodes[nodeId]?.value ?? '—';
   const visitedValues = (activeStep?.visited ?? []).map((nodeId) => nodeValue(nodeId));
+  const searchPathValues = activeStep?.pathValues ?? (activeStep?.path ?? []).map((nodeId) => nodeValue(nodeId));
   const callStackValues = (activeStep?.callStack ?? []).map((nodeId) => nodeValue(nodeId));
   const queueValues = (activeStep?.queue ?? []).map((nodeId) => nodeValue(nodeId));
   return (
@@ -294,7 +324,7 @@ export default function TreesStudio({ lessonId }) {
         <form onSubmit={runVisualization} className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
           <div className="flex flex-wrap items-end gap-3">
             <div className="min-w-[230px] flex-1">
-              <label htmlFor="tree-values" className="mb-1 block text-sm font-medium text-slate-700">Level-order node values</label>
+              <label htmlFor="tree-values" className="mb-1 block text-sm font-medium text-slate-700">{['bst-insertion', 'bst-searching', 'bst-deletion'].includes(lessonId) ? 'Existing BST values (level order)' : 'Level-order node values'}</label>
               <input
                 id="tree-values"
                 value={inputText}
@@ -306,6 +336,69 @@ export default function TreesStudio({ lessonId }) {
               />
               <p id="tree-input-help" className="mt-1 text-xs text-slate-500">Use commas and # for a missing child. Maximum 15 nodes.</p>
             </div>
+            {lessonId === 'bst-insertion' && (
+              <div className="min-w-[150px]">
+                <label htmlFor="bst-insert-value" className="mb-1 block text-sm font-medium text-slate-700">Number to insert</label>
+                <input
+                  id="bst-insert-value"
+                  type="text"
+                  inputMode="numeric"
+                  value={insertionValue}
+                  onChange={(event) => {
+                    setInsertionValue(event.target.value);
+                    setTrace(null);
+                    setCurrentStep(0);
+                    setIsPlaying(false);
+                    setInputError('');
+                  }}
+                  aria-invalid={Boolean(inputError)}
+                  aria-describedby={inputError ? 'tree-input-error' : undefined}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
+                />
+              </div>
+            )}
+            {lessonId === 'bst-searching' && (
+              <div className="min-w-[150px]">
+                <label htmlFor="bst-search-target" className="mb-1 block text-sm font-medium text-slate-700">Target number</label>
+                <input
+                  id="bst-search-target"
+                  type="text"
+                  inputMode="numeric"
+                  value={searchTarget}
+                  onChange={(event) => {
+                    setSearchTarget(event.target.value);
+                    setTrace(null);
+                    setCurrentStep(0);
+                    setIsPlaying(false);
+                    setInputError('');
+                  }}
+                  aria-invalid={Boolean(inputError)}
+                  aria-describedby={inputError ? 'tree-input-error' : undefined}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
+                />
+              </div>
+            )}
+            {lessonId === 'bst-deletion' && (
+              <div className="min-w-[150px]">
+                <label htmlFor="bst-delete-value" className="mb-1 block text-sm font-medium text-slate-700">Value to delete</label>
+                <input
+                  id="bst-delete-value"
+                  type="text"
+                  inputMode="numeric"
+                  value={deletionValue}
+                  onChange={(event) => {
+                    setDeletionValue(event.target.value);
+                    setTrace(null);
+                    setCurrentStep(0);
+                    setIsPlaying(false);
+                    setInputError('');
+                  }}
+                  aria-invalid={Boolean(inputError)}
+                  aria-describedby={inputError ? 'tree-input-error' : undefined}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
+                />
+              </div>
+            )}
             {!isBstLesson && (
               <div>
                 <label htmlFor="tree-traversal" className="mb-1 block text-sm font-medium text-slate-700">Traversal</label>
@@ -329,7 +422,7 @@ export default function TreesStudio({ lessonId }) {
               </select>
             </div>
             <button type="submit" className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500">
-              {isBstLesson ? 'Validate BST' : 'Visualize traversal'}
+              {lessonId === 'bst-insertion' ? 'Insert number' : lessonId === 'bst-searching' ? 'Search BST' : lessonId === 'bst-deletion' ? 'Delete value' : isBstLesson ? 'Validate BST' : 'Visualize traversal'}
             </button>
           </div>
           {(inputError || parsed.error) && <p id="tree-input-error" role="alert" className="mt-3 text-sm text-rose-700">{inputError || parsed.error}</p>}
@@ -342,14 +435,57 @@ export default function TreesStudio({ lessonId }) {
           <span className="text-xs text-slate-500">Current node is amber · visited nodes are green</span>
         </div>
         <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white p-3">
-          {parsed.tree ? <TreeDiagram tree={parsed.tree} step={activeStep} /> : <div className="grid min-h-40 place-items-center text-sm text-rose-700">Correct the input to display the tree.</div>}
+          {displayedTree ? <TreeDiagram tree={displayedTree} step={activeStep} /> : <div className="grid min-h-40 place-items-center text-sm text-rose-700">Correct the input to display the tree.</div>}
         </div>
         {activeStep?.complete && (
-          <div role="status" className={`mt-3 rounded-lg px-3 py-2 text-sm font-semibold ${activeStep.result?.isBst === false ? 'bg-rose-50 text-rose-800' : 'bg-emerald-50 text-emerald-800'}`}>
-            {isBstLesson
+          <div role="status" className={`mt-3 rounded-lg px-3 py-2 text-sm font-semibold ${activeStep.duplicate || activeStep.result?.isBst === false || (lessonId === 'bst-deletion' && !activeStep.result.deleted) ? 'bg-rose-50 text-rose-800' : 'bg-emerald-50 text-emerald-800'}`}>
+            {lessonId === 'bst-deletion'
+              ? activeStep.result.deleted
+                ? `Deleted ${activeStep.result.deletedValue}. Deletion case: ${activeStep.result.deletionCase === 'two-children' ? `two children; successor ${activeStep.result.successorValue}` : activeStep.result.deletionCase}.`
+                : `Element Not Found: ${activeStep.result.value} is not in the BST.`
+              : lessonId === 'bst-searching'
+              ? activeStep.result.found ? 'Element Found' : 'Element Not Found'
+              : lessonId === 'bst-insertion'
+              ? activeStep.duplicate
+                ? `Duplicate: ${activeStep.insertedValue ?? insertionValue} is already present. The BST was not changed.`
+                : `Inserted ${activeStep.insertedValue} successfully. The tree now contains ${activeStep.tree.nodes.length} nodes.`
+              : isBstLesson
               ? activeStep.result.isBst ? 'Valid BST: every node satisfies its ancestor bounds.' : `Not a BST: ${activeStep.result.offendingValue} violates its allowed ancestor bounds.`
               : `Traversal order: ${activeStep.result.join(' → ') || '(empty tree)'}`}
           </div>
+        )}
+        {lessonId === 'bst-deletion' && activeStep && (
+          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+              <span className="text-slate-500">Search path:</span>{' '}
+              <span className="font-semibold text-slate-800">{searchPathValues.join(' → ') || '(empty tree)'}</span>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+              <span className="text-slate-500">Comparisons:</span>{' '}
+              <span className="font-semibold text-slate-800">{activeStep.comparisons}</span>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+              <span className="text-slate-500">Tree values:</span>{' '}
+              <span className="font-semibold text-slate-800">{activeStep.result.values.join(', ') || '(empty)'}</span>
+            </div>
+          </div>
+        )}
+        {lessonId === 'bst-searching' && activeStep && (
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+              <span className="text-slate-500">Search path:</span>{' '}
+              <span className="font-semibold text-slate-800">{searchPathValues.join(' → ') || '(empty tree)'}</span>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+              <span className="text-slate-500">Total comparisons:</span>{' '}
+              <span className="font-semibold text-slate-800">{activeStep.comparisons}</span>
+            </div>
+          </div>
+        )}
+        {lessonId === 'bst-insertion' && activeStep?.direction && (
+          <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">
+            Move {activeStep.direction} from {activeStep.currentValue}; {activeStep.direction === 'left' ? 'the value is smaller.' : 'the value is larger.'}
+          </p>
         )}
       </section>
 
@@ -404,8 +540,8 @@ export default function TreesStudio({ lessonId }) {
         </div>
       </section>
 
-      <AnswerChoices title="Practice question" question={content.practice[0]} options={content.practice[1]} answer={content.practice[2]} />
-      <AnswerChoices title="Quick quiz" question={content.quiz[0]} options={content.quiz[1]} answer={content.quiz[2]} />
+      <AnswerChoices title="Practice question" question={practice[0]} options={practice[1]} answer={practice[2]} />
+      <AnswerChoices title="Quick quiz" question={quiz[0]} options={quiz[1]} answer={quiz[2]} />
     </div>
   );
 }

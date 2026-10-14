@@ -1,8 +1,18 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from .auth import initialize_database, router as auth_router
 
-app = FastAPI(title='VizFlow API', version='1.0.0')
+
+@asynccontextmanager
+async def lifespan(_app):
+    initialize_database()
+    yield
+
+
+app = FastAPI(title='VizFlow API', version='1.0.0', lifespan=lifespan)
+app.include_router(auth_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -11,11 +21,6 @@ app.add_middleware(
     allow_methods=['*'],
     allow_headers=['*'],
 )
-
-class LoginRequest(BaseModel):
-    email: str
-    password: str
-    role: str = 'student'
 
 CURRICULUM = [
     {
@@ -39,31 +44,9 @@ CURRICULUM = [
     },
 ]
 
-STUDENT_ACCOUNT = {
-    'email': 'aanya@vizflow.edu',
-    'password': 'demo123',
-    'role': 'student',
-    'name': 'Aanya Sharma',
-}
-
-FACULTY_ACCOUNT = {
-    'email': 'meera@vizflow.edu',
-    'password': 'demo123',
-    'role': 'faculty',
-    'name': 'Dr. Meera Patel',
-}
-
 @app.get('/api/health')
 def health():
     return {'status': 'ok', 'service': 'vizflow-backend'}
-
-@app.post('/api/auth/login')
-def login(payload: LoginRequest):
-    account = STUDENT_ACCOUNT if payload.role == 'student' else FACULTY_ACCOUNT
-    if payload.email == account['email'] and payload.password == account['password']:
-        return {'token': 'demo-token-for-dev', 'user': {'role': account['role'], 'name': account['name'], 'email': account['email']}} 
-
-    return {'detail': 'Invalid credentials'}, 401
 
 @app.get('/api/curriculum')
 def curriculum():

@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { curriculumData, studentOverview, facultySummary } from './data/curriculum';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { curriculumData } from './data/curriculum';
 import FundamentalsStudio from './FundamentalsStudio';
 import GraphStudio from './GraphStudio';
 import TreesStudio from './TreesStudio';
@@ -14,6 +14,40 @@ import {
   parseInteger,
   parseIntegerArray,
 } from './lib/visualizationEngine';
+
+const API_BASE = import.meta.env.VITE_API_URL ?? '';
+
+async function apiRequest(path, options = {}) {
+  let response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      credentials: 'include',
+      headers: {
+        ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+        ...options.headers,
+      },
+    });
+  } catch {
+    throw new Error('Cannot connect to VizFlow. Make sure the backend server is running.');
+  }
+
+  if (response.status === 204) return null;
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const detail = Array.isArray(payload.detail)
+      ? payload.detail.map((item) => item.msg).join(' ')
+      : payload.detail;
+    const error = new Error(detail || 'The request could not be completed.');
+    error.status = response.status;
+    throw error;
+  }
+  return payload;
+}
+
+function findLesson(lessonId) {
+  return curriculumData.flatMap((module) => module.lessons).find((lesson) => lesson.id === lessonId);
+}
 
 const twoPointerPatterns = [
   { id: 'two-sum', label: 'Two Sum (sorted array)' },
@@ -1285,9 +1319,13 @@ function valuesForMemory(input) {
   return input;
 }
 
-function StudentDashboard() {
-  const weekly = studentOverview.weeklyMinutes;
-  const maxWeek = Math.max(...weekly);
+function StudentDashboard({ student, progress, totalLessons, onResume }) {
+  const weekly = progress?.weeklyMinutes ?? [0, 0, 0, 0, 0, 0, 0];
+  const maxWeek = Math.max(...weekly, 1);
+  const completedCount = progress?.completedLessons?.length ?? 0;
+  const history = progress?.history ?? [];
+  const latestLesson = history.find((entry) => entry.eventType === 'lesson_opened');
+  const latestLessonData = latestLesson ? findLesson(latestLesson.lessonId) : null;
 
   return (
     <div className="space-y-6">
@@ -1295,26 +1333,27 @@ function StudentDashboard() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-sm uppercase tracking-[0.2em] text-slate-500">Student portal</p>
-            <h1 className="mt-2 text-3xl font-bold text-slate-900">Welcome back, {studentOverview.name}</h1>
+            <h1 className="mt-2 text-3xl font-bold text-slate-900">Welcome back, {student.name}</h1>
           </div>
-          <button type="button" className="rounded-xl bg-indigo-600 px-4 py-3 text-sm font-medium text-white hover:bg-indigo-500">Resume latest lesson</button>
+          <button type="button" onClick={() => onResume(latestLessonData?.id)} className="rounded-xl bg-indigo-600 px-4 py-3 text-sm font-medium text-white hover:bg-indigo-500">
+            {latestLessonData ? `Resume ${latestLessonData.title}` : 'Explore the curriculum'}
+          </button>
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Estimated active time" value={`${studentOverview.totalActiveMinutes} min`} subtext="Across all tracked lessons" accent="blue" />
-        <StatCard label="Today" value={`${studentOverview.todayMinutes} min`} subtext="Focused practice time" accent="green" />
-        <StatCard label="Lessons complete" value={`${studentOverview.completedLessons}/${studentOverview.totalLessons}`} subtext="Progress this term" accent="amber" />
-        <StatCard label="Learning streak" value={`${studentOverview.streak} days`} subtext="Consecutive study days" accent="purple" />
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <StatCard label="Study time" value={`${Math.floor((progress?.totalStudySeconds ?? 0) / 60)} min`} subtext="Time spent in lessons" accent="blue" />
+        <StatCard label="Today" value={`${Math.floor((progress?.todayStudySeconds ?? 0) / 60)} min`} subtext="Focused study time" accent="green" />
+        <StatCard label="Lessons complete" value={`${completedCount}/${totalLessons}`} subtext="Your completed lessons" accent="amber" />
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[1.3fr_0.7fr]">
         <div className="card p-5">
-          <h2 className="text-xl font-semibold text-slate-800">Weekly learning activity</h2>
+          <h2 className="text-xl font-semibold text-slate-800">Your weekly learning activity</h2>
           <div className="mt-5 flex h-44 items-end gap-3">
             {weekly.map((value, index) => (
               <div key={index} className="flex flex-1 flex-col items-center justify-end gap-2">
-                <div className="w-full rounded-t-xl bg-gradient-to-t from-blue-600 to-blue-300" style={{ height: `${(value / maxWeek) * 100}%` }} />
+                <div className="w-full rounded-t-xl bg-gradient-to-t from-blue-600 to-blue-300" style={{ height: `${Math.max(value ? (value / maxWeek) * 100 : 0, value ? 4 : 0)}%` }} />
                 <span className="text-xs text-slate-500">{['S', 'M', 'T', 'W', 'T', 'F', 'S'][index]}</span>
               </div>
             ))}
@@ -1322,140 +1361,299 @@ function StudentDashboard() {
         </div>
 
         <div className="card p-5">
-          <h2 className="text-xl font-semibold text-slate-800">Recommended next</h2>
-          <div className="mt-4 rounded-xl bg-slate-50 p-4">
-            <div className="text-sm uppercase tracking-[0.18em] text-indigo-600">Priority topic</div>
-            <div className="mt-2 text-lg font-bold text-slate-900">Binary Search</div>
-            <p className="mt-2 text-sm text-slate-600">Your recent pattern recognition score improved, and this lesson is the best next step to reinforce array search techniques.</p>
-          </div>
+          <h2 className="text-xl font-semibold text-slate-800">Learning history</h2>
+          {history.length ? (
+            <ul className="mt-4 space-y-3">
+              {history.slice(0, 6).map((entry, index) => (
+                <li key={`${entry.lessonId}-${entry.eventType}-${entry.at}-${index}`} className="rounded-xl bg-slate-50 p-3">
+                  <p className="text-sm font-semibold text-slate-800">{findLesson(entry.lessonId)?.title ?? entry.lessonId}</p>
+                  <p className="mt-1 text-xs text-slate-500">{entry.eventType === 'lesson_completed' ? 'Lesson completed' : 'Lesson opened'} · {new Date(entry.at).toLocaleString()}</p>
+                </li>
+              ))}
+            </ul>
+          ) : <p className="mt-3 text-sm text-slate-600">Open a lesson to start building your learning history.</p>}
         </div>
       </div>
     </div>
   );
 }
 
-function FacultyDashboard() {
-  return (
-    <div className="space-y-6">
-      <div className="card p-6">
-        <p className="text-sm uppercase tracking-[0.2em] text-slate-500">Faculty portal</p>
-        <h1 className="mt-2 text-3xl font-bold text-slate-900">Learning overview for {facultySummary.name}</h1>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Enrolled students" value={facultySummary.classSize} subtext="Across all active cohorts" accent="blue" />
-        <StatCard label="Average active time" value={`${facultySummary.averageMinutes} min`} subtext="Per student, weekly" accent="green" />
-        <StatCard label="Active learners" value={`${facultySummary.activeStudents}`} subtext="Students with recent activity" accent="amber" />
-        <StatCard label="Support watchlist" value="5" subtext="Low activity or unfinished lessons" accent="purple" />
-      </div>
-
-      <div className="card p-5">
-        <h2 className="text-xl font-semibold text-slate-800">Topic participation</h2>
-        <div className="mt-5 space-y-4">
-          {facultySummary.topicActivity.map((topic) => (
-            <div key={topic.name}>
-              <div className="mb-1 flex items-center justify-between text-sm text-slate-600">
-                <span>{topic.name}</span>
-                <span>{topic.value}%</span>
-              </div>
-              <div className="h-2.5 rounded-full bg-slate-200">
-                <div className="h-2.5 rounded-full bg-indigo-500" style={{ width: `${topic.value}%` }} />
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function LoginPanel({ onLogin }) {
-  const [role, setRole] = useState('student');
-  const [email, setEmail] = useState('aanya@vizflow.edu');
-  const [password, setPassword] = useState('demo123');
+function AuthPage({ mode, onModeChange, onSubmit, error, loading }) {
+  const isSignup = mode === 'signup';
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
 
   const handleSubmit = (event) => {
     event.preventDefault();
-    onLogin({ role, email, password });
+    if (isSignup) {
+      if (!fullName.trim()) return onSubmit({ error: 'Enter your full name.' });
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return onSubmit({ error: 'Enter a valid email address.' });
+      if (password.length < 8) return onSubmit({ error: 'Your password must be at least 8 characters long.' });
+      if (password !== confirmPassword) return onSubmit({ error: 'The passwords do not match.' });
+    }
+    onSubmit({ fullName, email, password });
   };
 
   return (
-    <div className="card p-6">
-      <div className="mb-5 flex items-center justify-between">
+    <div className="grid overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl lg:min-h-[620px] lg:grid-cols-[1fr_1fr]">
+      <section className="flex flex-col justify-between bg-gradient-to-br from-slate-950 via-blue-950 to-indigo-800 p-8 text-white sm:p-12">
         <div>
-          <p className="text-sm uppercase tracking-[0.18em] text-slate-500">Access portal</p>
-          <h2 className="mt-2 text-2xl font-bold text-slate-900">Sign in</h2>
+          <div className="inline-flex rounded-2xl bg-white/10 px-4 py-2 text-xl font-black tracking-tight">VizFlow</div>
+          <p className="mt-12 text-sm font-semibold uppercase tracking-[0.24em] text-blue-200">Learn by seeing it work</p>
+          <h1 className="mt-4 max-w-lg text-4xl font-black leading-tight sm:text-5xl">Make algorithms feel intuitive.</h1>
+          <p className="mt-5 max-w-lg text-base leading-7 text-blue-100">Explore interactive data-structure lessons, follow every algorithm step, and keep your learning progress in one personal account.</p>
         </div>
-      </div>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label htmlFor="login-role" className="mb-1 block text-sm font-medium text-slate-700">Role</label>
-          <select id="login-role" value={role} onChange={(e) => setRole(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-slate-700">
-            <option value="student">Student</option>
-            <option value="faculty">Faculty</option>
-          </select>
+        <div className="mt-12 grid grid-cols-3 gap-3 text-center text-sm">
+          {['Visual lessons', 'Your own progress', 'Learn at your pace'].map((item) => <div key={item} className="rounded-xl border border-white/15 bg-white/10 px-2 py-3 text-blue-50">{item}</div>)}
         </div>
-        <div>
-          <label htmlFor="login-email" className="mb-1 block text-sm font-medium text-slate-700">Email</label>
-          <input id="login-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-slate-700" />
+      </section>
+
+      <section className="flex items-center justify-center p-6 sm:p-10">
+        <div className="w-full max-w-md">
+          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-indigo-600">Student account</p>
+          <h2 className="mt-2 text-3xl font-bold text-slate-900">{isSignup ? 'Create your account' : 'Welcome back'}</h2>
+          <p className="mt-2 text-sm text-slate-600">{isSignup ? 'Sign up to save your lesson progress and study history.' : 'Sign in to continue learning where you left off.'}</p>
+
+          <form onSubmit={handleSubmit} className="mt-7 space-y-4" noValidate>
+            {isSignup && (
+              <div>
+                <label htmlFor="signup-name" className="mb-1 block text-sm font-medium text-slate-700">Full name</label>
+                <input id="signup-name" autoComplete="name" required maxLength={120} value={fullName} onChange={(event) => setFullName(event.target.value)} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100" />
+              </div>
+            )}
+            <div>
+              <label htmlFor="auth-email" className="mb-1 block text-sm font-medium text-slate-700">Email address</label>
+              <input id="auth-email" type="email" autoComplete="email" required maxLength={255} value={email} onChange={(event) => setEmail(event.target.value)} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100" />
+            </div>
+            <div>
+              <label htmlFor="auth-password" className="mb-1 block text-sm font-medium text-slate-700">Password</label>
+              <input id="auth-password" type="password" autoComplete={isSignup ? 'new-password' : 'current-password'} required minLength={isSignup ? 8 : 1} maxLength={128} value={password} onChange={(event) => setPassword(event.target.value)} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100" />
+              {isSignup && <p className="mt-1 text-xs text-slate-500">Use at least 8 characters.</p>}
+            </div>
+            {isSignup && (
+              <div>
+                <label htmlFor="auth-confirm-password" className="mb-1 block text-sm font-medium text-slate-700">Confirm password</label>
+                <input id="auth-confirm-password" type="password" autoComplete="new-password" required maxLength={128} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100" />
+              </div>
+            )}
+            {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</p>}
+            <button type="submit" disabled={loading} className="w-full rounded-xl bg-indigo-600 px-4 py-3 font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-wait disabled:opacity-60">
+              {loading ? 'Please wait…' : isSignup ? 'Create account' : 'Sign in'}
+            </button>
+          </form>
+
+          <p className="mt-6 text-center text-sm text-slate-600">
+            {isSignup ? 'Already have an account?' : 'New to VizFlow?'}{' '}
+            <button type="button" onClick={() => onModeChange(isSignup ? 'login' : 'signup')} className="font-semibold text-indigo-700 hover:text-indigo-500">
+              {isSignup ? 'Sign in' : 'Create an account'}
+            </button>
+          </p>
         </div>
-        <div>
-          <label htmlFor="login-password" className="mb-1 block text-sm font-medium text-slate-700">Password</label>
-          <input id="login-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-slate-700" />
-        </div>
-        <button type="submit" className="w-full rounded-xl bg-blue-600 px-4 py-3 font-medium text-white transition hover:bg-blue-500">Continue</button>
-      </form>
-      <p className="mt-4 text-xs text-slate-500">Demo access: student email aanya@vizflow.edu / password demo123</p>
+      </section>
     </div>
   );
+}
+
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  handleReset = () => {
+    this.setState({ hasError: false });
+    this.props.onReset();
+  };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('VizFlow lesson render error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="card mx-auto mt-8 max-w-xl p-8 text-center">
+          <h2 className="text-2xl font-bold text-slate-900">Lesson failed to load</h2>
+          <p className="mt-2 text-sm text-slate-600">Something went wrong while rendering this lesson. Please return to the curriculum and try another lesson.</p>
+          <button
+            type="button"
+            onClick={this.handleReset}
+            className="mt-5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500"
+          >
+            Back to Curriculum
+          </button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
 }
 
 export default function App() {
   const [session, setSession] = useState(null);
-  const [completedLessons, setCompletedLessons] = useState([]);
-  const [selectedLesson, setSelectedLesson] = useState({
-    ...getLessonDefinition('bubble-sort'),
-    algorithm: 'bubble-sort',
-  });
+  const [progress, setProgress] = useState(null);
+  const [selectedLesson, setSelectedLesson] = useState(null);
+  const [authMode, setAuthMode] = useState('login');
+  const [authReady, setAuthReady] = useState(false);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState('');
+  const [pageError, setPageError] = useState('');
+  const activeStudyFlush = useRef(null);
+  const activeSessionId = useRef(null);
+  const totalLessons = useMemo(() => curriculumData.reduce((total, module) => total + module.lessons.length, 0), []);
+  const completedLessons = progress?.completedLessons ?? [];
+
+  const loadProgress = useCallback(async () => {
+    const requestedUserId = activeSessionId.current;
+    if (requestedUserId === null) return null;
+    try {
+      const data = await apiRequest('/api/progress');
+      if (activeSessionId.current !== requestedUserId) return null;
+      setProgress(data);
+      return data;
+    } catch (error) {
+      if (activeSessionId.current !== requestedUserId) return null;
+      throw error;
+    }
+  }, []);
 
   useEffect(() => {
-    if (session?.role !== 'student') {
-      setCompletedLessons([]);
-      return;
-    }
-    const stored = window.localStorage.getItem(`vizflow-completed-lessons:${session.email}`);
-    const allowedIds = new Set(fundamentalsLessonIds);
-    const parsed = stored ? JSON.parse(stored) : [];
-    setCompletedLessons(Array.isArray(parsed) ? parsed.filter((lessonId) => allowedIds.has(lessonId)) : []);
-  }, [session?.email, session?.role]);
+    let cancelled = false;
+    apiRequest('/api/auth/me')
+      .then(({ user }) => {
+        if (!cancelled) {
+          activeSessionId.current = user?.id ?? null;
+          setSession(user);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled && error.status !== 401) setAuthError(error.message);
+      })
+      .finally(() => {
+        if (!cancelled) setAuthReady(true);
+      });
+    return () => { cancelled = true; };
+  }, []);
 
-  const completeLesson = useCallback((lessonId) => {
-    setCompletedLessons((current) => {
-      if (current.includes(lessonId)) return current;
-      return [...current, lessonId];
+  useEffect(() => {
+    if (!session) {
+      setProgress(null);
+      setPageError('');
+      return undefined;
+    }
+    let cancelled = false;
+    loadProgress().catch((error) => {
+      if (!cancelled) setPageError(error.message);
     });
-    if (session?.email) {
-      const key = `vizflow-completed-lessons:${session.email}`;
-      const stored = window.localStorage.getItem(key);
-      const parsed = stored ? JSON.parse(stored) : [];
-      const current = Array.isArray(parsed) ? parsed : [];
-      if (!current.includes(lessonId)) window.localStorage.setItem(key, JSON.stringify([...current, lessonId]));
-    }
-  }, [session?.email]);
+    return () => { cancelled = true; };
+  }, [loadProgress, session?.id]);
 
-  const login = ({ role, email, password }) => {
-    if (role === 'student' && email === 'aanya@vizflow.edu' && password === 'demo123') {
-      setSession({ role: 'student', name: studentOverview.name, email });
+  const handleAuthSubmit = async ({ fullName, email, password, error }) => {
+    if (error) {
+      setAuthError(error);
       return;
     }
-
-    if (role === 'faculty' && email === 'meera@vizflow.edu' && password === 'demo123') {
-      setSession({ role: 'faculty', name: facultySummary.name, email });
-      return;
+    setAuthError('');
+    setAuthLoading(true);
+    try {
+      const isSignup = authMode === 'signup';
+      const result = await apiRequest(isSignup ? '/api/auth/register' : '/api/auth/login', {
+        method: 'POST',
+        body: JSON.stringify(isSignup ? { full_name: fullName.trim(), email: email.trim(), password } : { email: email.trim(), password }),
+      });
+      setSession(result.user);
+      activeSessionId.current = result.user.id;
+      setProgress(null);
+      setSelectedLesson(null);
+      setPageError('');
+      setAuthError('');
+    } catch (errorResponse) {
+      setAuthError(errorResponse.message);
+    } finally {
+      setAuthLoading(false);
     }
-
-    alert('Invalid credentials. Use the demo account details shown below.');
   };
+
+  const flushStudyTime = useCallback(async () => {
+    if (activeStudyFlush.current) await activeStudyFlush.current();
+  }, []);
+
+  const logout = async () => {
+    setPageError('');
+    try {
+      await flushStudyTime();
+      await apiRequest('/api/auth/logout', { method: 'POST' });
+      activeSessionId.current = null;
+      setSession(null);
+      setProgress(null);
+      setSelectedLesson(null);
+      setAuthMode('login');
+      setAuthError('');
+    } catch (error) {
+      setPageError(error.message);
+    }
+  };
+
+  const openLesson = (lesson) => {
+    const algorithm = lesson.algorithm || lesson.id;
+    setSelectedLesson({ ...getLessonDefinition(algorithm), ...lesson, algorithm });
+    setPageError('');
+    apiRequest(`/api/progress/lessons/${encodeURIComponent(lesson.id)}/visit`, { method: 'POST' })
+      .then(loadProgress)
+      .catch((error) => setPageError(error.message));
+  };
+
+  const completeLesson = useCallback(async (lessonIdOrAlgorithm) => {
+    const lesson = curriculumData.flatMap((module) => module.lessons).find((item) => (
+      item.id === lessonIdOrAlgorithm || (item.algorithm || item.id) === lessonIdOrAlgorithm
+    ));
+    const lessonId = lesson?.id ?? lessonIdOrAlgorithm;
+    try {
+      await apiRequest(`/api/progress/lessons/${encodeURIComponent(lessonId)}/complete`, { method: 'POST' });
+      await loadProgress();
+      setPageError('');
+    } catch (error) {
+      setPageError(error.message);
+    }
+  }, [loadProgress]);
+
+  useEffect(() => {
+    if (!session || !selectedLesson) return undefined;
+    let lastFlush = Date.now();
+    const flush = async () => {
+      if (document.visibilityState !== 'visible') return;
+      const elapsedSeconds = Math.floor((Date.now() - lastFlush) / 1000);
+      if (elapsedSeconds < 1) return;
+      const activeSeconds = Math.min(elapsedSeconds, 300);
+      lastFlush += activeSeconds * 1000;
+      try {
+        await apiRequest(`/api/progress/lessons/${encodeURIComponent(selectedLesson.id)}/activity`, {
+          method: 'POST',
+          body: JSON.stringify({ active_seconds: activeSeconds }),
+        });
+        await loadProgress();
+      } catch (error) {
+        setPageError(error.message);
+      }
+    };
+    const handleVisibilityChange = () => { lastFlush = Date.now(); };
+    activeStudyFlush.current = flush;
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    const timer = window.setInterval(flush, 15_000);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (activeStudyFlush.current === flush) activeStudyFlush.current = null;
+      void flush();
+    };
+  }, [loadProgress, selectedLesson?.id, session?.id]);
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900">
@@ -1465,86 +1663,91 @@ export default function App() {
             <div className="text-2xl font-black tracking-tight text-slate-900">VizFlow</div>
             <div className="text-xs uppercase tracking-[0.2em] text-slate-500">Interactive DSA learning</div>
           </div>
-          <nav className="hidden items-center gap-6 text-sm font-medium text-slate-600 md:flex">
-            <button type="button" className="hover:text-slate-900">Curriculum</button>
-            <button type="button" className="hover:text-slate-900">Lessons</button>
-            <button type="button" className="hover:text-slate-900">Analytics</button>
-          </nav>
-          <div className="flex items-center gap-3">
-            <span className="badge bg-blue-100 text-blue-700">Active learning metrics</span>
-            {session ? (
-              <button type="button" onClick={() => setSession(null)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Sign out</button>
-            ) : (
-              <span className="text-sm font-medium text-slate-500">Demo mode</span>
-            )}
-          </div>
+          {session && <div className="flex items-center gap-3">
+            <span className="hidden text-sm font-medium text-slate-600 sm:inline">{session.name}</span>
+            <button type="button" onClick={logout} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Log out</button>
+          </div>}
         </div>
       </header>
 
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        {!session ? (
-          <div className="grid gap-6 lg:grid-cols-[0.7fr_1.3fr]">
-            <LoginPanel onLogin={login} />
-            <div className="space-y-5">
-              <div className="card p-6">
-                <p className="text-xs uppercase tracking-[0.2em] text-indigo-600">Platform overview</p>
-                <h2 className="mt-2 text-3xl font-bold text-slate-900">Build deeper intuition for algorithms</h2>
-                <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">
-                  VizFlow combines structured DSA lessons, interactive visualizations, and analytics that estimate active learning time instead of raw session duration.
-                </p>
-              </div>
-              <ModuleList
-                completedLessons={completedLessons}
-                onSelectLesson={(lesson) => setSelectedLesson({ ...getLessonDefinition(lesson.algorithm || lesson.id), ...lesson, algorithm: lesson.algorithm || lesson.id })}
+        <ErrorBoundary onReset={() => setSelectedLesson(null)}>
+          {!authReady ? (
+            <div role="status" className="card mx-auto max-w-xl p-8 text-center text-slate-600">Checking your secure student session…</div>
+          ) : !session ? (
+            <AuthPage
+              mode={authMode}
+              onModeChange={(mode) => { setAuthMode(mode); setAuthError(''); }}
+              onSubmit={handleAuthSubmit}
+              error={authError}
+              loading={authLoading}
+            />
+          ) : (
+            <div className="space-y-6">
+              {pageError && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{pageError}</p>}
+              <StudentDashboard
+                student={session}
+                progress={progress}
+                totalLessons={totalLessons}
+                onResume={(lessonId) => {
+                  const lesson = lessonId ? findLesson(lessonId) : null;
+                  if (lesson) openLesson(lesson);
+                  else document.getElementById('curriculum')?.scrollIntoView({ behavior: 'smooth' });
+                }}
               />
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            <div className="card p-5">
-              <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Signed in as</p>
-                  <h2 className="text-2xl font-bold text-slate-900">{session.name}</h2>
+
+              {selectedLesson ? (
+                <div className="space-y-5">
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <button
+                      type="button"
+                      disabled={completedLessons.includes(selectedLesson.id)}
+                      onClick={() => completeLesson(selectedLesson.id)}
+                      className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:cursor-default disabled:bg-emerald-100 disabled:text-emerald-800"
+                    >
+                      {completedLessons.includes(selectedLesson.id) ? 'Lesson completed' : 'Mark lesson complete'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedLesson(null)}
+                      className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                    >
+                      Back to Curriculum
+                    </button>
+                  </div>
+                  {treeStudioLessonIds.includes(selectedLesson?.algorithm)
+                    ? <TreesStudio
+                        key={selectedLesson.algorithm}
+                        lessonId={selectedLesson.algorithm}
+                      />
+                    : graphStudioLessonIds.includes(selectedLesson?.algorithm)
+                    ? <GraphStudio
+                        key={selectedLesson.algorithm}
+                        lessonId={selectedLesson.algorithm}
+                      />
+                    : fundamentalsLessonIds.includes(selectedLesson?.algorithm)
+                    ? <FundamentalsStudio
+                        key={selectedLesson.algorithm}
+                        lessonId={selectedLesson.algorithm}
+                        completed={completedLessons.includes(selectedLesson.id)}
+                        onComplete={completeLesson}
+                      />
+                    : <LessonViewer lesson={selectedLesson} />}
                 </div>
-                <div className="badge bg-emerald-100 text-emerald-700">
-                  {session.role === 'student' ? 'Student portal' : 'Faculty portal'}
+              ) : (
+                <div id="curriculum" className="card p-5">
+                  <h2 className="text-xl font-semibold text-slate-800">DSA curriculum</h2>
+                  <div className="mt-5">
+                    <ModuleList
+                      completedLessons={completedLessons}
+                      onSelectLesson={openLesson}
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
-
-            {session.role === 'student' ? <StudentDashboard /> : <FacultyDashboard />}
-
-            <div className="card p-5">
-              <h2 className="text-xl font-semibold text-slate-800">DSA curriculum</h2>
-              <div className="mt-5">
-                <ModuleList
-                  completedLessons={completedLessons}
-                  onSelectLesson={(lesson) => setSelectedLesson({ ...getLessonDefinition(lesson.algorithm || lesson.id), ...lesson, algorithm: lesson.algorithm || lesson.id })}
-                />
-              </div>
-            </div>
-
-            {treeStudioLessonIds.includes(selectedLesson?.algorithm)
-              ? <TreesStudio
-                  key={selectedLesson.algorithm}
-                  lessonId={selectedLesson.algorithm}
-                />
-              : graphStudioLessonIds.includes(selectedLesson?.algorithm)
-              ? <GraphStudio
-                  key={selectedLesson.algorithm}
-                  lessonId={selectedLesson.algorithm}
-                />
-              : fundamentalsLessonIds.includes(selectedLesson?.algorithm)
-              ? <FundamentalsStudio
-                  key={selectedLesson.algorithm}
-                  lessonId={selectedLesson.algorithm}
-                  completed={completedLessons.includes(selectedLesson.algorithm)}
-                  onComplete={completeLesson}
-                />
-              : <LessonViewer lesson={selectedLesson} />}
-          </div>
-        )}
+          )}
+        </ErrorBoundary>
       </main>
     </div>
   );
