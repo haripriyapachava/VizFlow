@@ -17,10 +17,11 @@ app.include_router(auth_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-    'http://localhost:5173',
-    'http://127.0.0.1:5173',
-    'https://viz-flow-n2pthei1c-haripriyapachava.vercel.app',
-],
+        'http://localhost:5173',
+        'http://127.0.0.1:5173',
+        'https://viz-flow-n2pthei1c-haripriyapachava.vercel.app',
+        'https://viz-flow.vercel.app',
+    ],
     allow_credentials=True,
     allow_methods=['*'],
     allow_headers=['*'],
